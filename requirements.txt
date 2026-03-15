@@ -12,8 +12,7 @@ pyserial==3.5
 numpy>=1.21.0
 Pillow>=9.0.0
 
+tflite-runtime
+
 opencv-python==4.13.0.92; platform_machine == "x86_64"
 opencv-python-headless>=4.5.0; platform_machine == "aarch64"
-
-tensorflow; platform_machine == "x86_64"
-tflite-runtime; platform_machine == "aarch64"

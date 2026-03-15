@@ -3,6 +3,8 @@ import os
 import pathlib
 from typing import Any
 
+import ai
+
 config_pattern = """
 {
   "ai": {
@@ -252,6 +254,9 @@ def read_config():
     else:
         create_config()
         config = json.loads(config_pattern)
+
+    if config["ai"]["default_model"] is not "":
+        ai.load_model(config["ai"]["default_model"])
 
 
 def update_config():

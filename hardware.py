@@ -5,8 +5,7 @@ from typing import Optional
 
 import serial
 import serial.tools.list_ports
-
-from ai import *
+import cv2
 import backend
 
 
@@ -116,6 +115,7 @@ class Camera:
                 if not success:
                     break
                 else:
+                    from ai import think
                     await think(frame)
                     ret, buffer = cv2.imencode('.jpg', frame)
                     frame_bytes = buffer.tobytes()

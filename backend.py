@@ -94,6 +94,10 @@ async def proceed_ws(data):
     elif data["type"] == "useModel":
         config.config['ai']['default_model'] = data["model"]
         config.update_config()
+        if data["model"] == "":
+            ai.unload_model()
+        else:
+            ai.load_model(config.config["ai"]["default_model"])
     elif data["type"] == "getContainer":
         await Socket.send({
             "type": "getContainer",

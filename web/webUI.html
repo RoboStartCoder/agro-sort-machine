@@ -912,7 +912,7 @@
     }
 
     function updateParameter(type, aiName, r, g, b, w, h, containerId, containerName) {
-        document.getElementById('parameter-type').innerText = aiName === "" ? `No AI model selected` : `${type} (${aiName})`;
+        document.getElementById('parameter-type').innerText = aiName === null ? `No AI model selected` : `${type} (${aiName})`;
 
         document.getElementById('parameter-color').innerHTML = `
         <div id="parameter-color-box" style="background-color: rgb(${r}, ${g}, ${b})" class="data-color"></div>

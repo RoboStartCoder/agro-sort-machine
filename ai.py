@@ -1,5 +1,7 @@
 import cv2
 import numpy as np
+import tensorflow.lite as tflite
+import asyncio
 
 import backend
 import config
@@ -8,7 +10,10 @@ allow_control: bool = False
 pixels_per_cm: float = 1.0
 object_found: bool = False
 
-import asyncio
+_interpreter = None
+_input_details = None
+_output_details = None
+_labels = None
 
 async def think(frame):
     global object_found
@@ -27,12 +32,12 @@ async def think(frame):
             result["color"][2],
             result["size"][0],
             result["size"][1]
-        )
+        ) if result["ai"] is not None else None
 
         await backend.Socket.send({
             "type": "parameter",
             "containerId": container if result["ai"] is not None else None,
-            "aiType": result["ai"][0] if result["ai"] is not None else None,
+            "aiType": result["ai"] if result["ai"] is not None else None,
             "aiName": config.get_default_model() if result["ai"] is not None else None,
             "r": int(result["color"][0]),
             "g": int(result["color"][1]),
@@ -51,11 +56,12 @@ def get_object(frame):
     object_color = get_object_color(frame, mask)
     object_type = get_object_type(frame[ymin:ymax, xmin:xmax])
 
-    return {
+    object_ = {
         "size": object_size,
         "color": object_color,
         "ai": object_type
     }
+    return object_
 
 def get_object_available(frame):
     h, w = frame.shape[:2]
@@ -77,7 +83,51 @@ def get_object_available(frame):
 def get_object_type(frame):
     if config.get_default_model() is None:
         return None
-    return "TODO_RETURN_TYPE"
+
+    if _interpreter is None:
+        return None
+
+    h, w = _input_details[0]["shape"][1:3]
+
+    img = cv2.resize(frame, (w, h))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    img = np.expand_dims(img, axis=0)
+
+    if _input_details[0]["dtype"] == np.float32:
+        img = img.astype(np.float32) / 255.0
+
+    _interpreter.set_tensor(_input_details[0]["index"], img)
+    _interpreter.invoke()
+
+    output = _interpreter.get_tensor(_output_details[0]["index"])[0]
+    class_id = np.argmax(output)
+
+    return _labels[class_id]
+
+def load_model(name):
+    global _interpreter, _input_details, _output_details, _labels
+
+    model_path = f"models/{name}.tflite"
+    labels_path = f"models/{name}.txt"
+
+    _interpreter = tflite.Interpreter(model_path=model_path)
+    _interpreter.allocate_tensors()
+
+    _input_details = _interpreter.get_input_details()
+    _output_details = _interpreter.get_output_details()
+
+    _labels = []
+    with open(labels_path, "r") as f:
+        for line in f:
+            parts = line.strip().split(maxsplit=1)
+            _labels.append(parts[1])
+
+def unload_model():
+    global _interpreter, _input_details, _output_details, _labels
+    _interpreter = None
+    _input_details = None
+    _output_details = None
+    _labels = None
 
 def get_object_color(frame, mask):
     object_pixels = frame[mask > 0]
