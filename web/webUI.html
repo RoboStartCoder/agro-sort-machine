@@ -770,7 +770,7 @@
         formData.append("model", modelFile);
         formData.append("labels", modelLabels);
 
-        await fetch("http://localhost:8000/api/upload", {
+        await fetch(`http://${window.location.host}/api/upload`, {
             method: "POST",
             body: formData
         });
