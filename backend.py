@@ -25,6 +25,7 @@ class Socket:
     def close(cls):
         cls.ws = None
         abandon()
+        ai.unload_model()
 
 def mount_backend(main_app: FastAPI):
     main_app.mount("/api", app)
@@ -35,6 +36,8 @@ async def websocket_endpoint(ws: WebSocket):
     Socket.ws = ws
     ai.object_found = False
     ai.allow_control = False
+    if config.config["ai"]["default_model"] != "":
+        ai.load_model(config.config["ai"]["default_model"])
     try:
         while True:
             await proceed_ws(loads(await ws.receive_text()))
@@ -60,6 +63,11 @@ async def upload_model(
     with open(labels_path, "wb") as f:
         shutil.copyfileobj(labels.file, f)
 
+    await Socket.send({
+        "type": "modelInfo",
+        "model": f"{config.config['ai']['default_model']}",
+        "modelsList": [p.name for p in pathlib.Path("models").glob("*.tflite")]
+    })
     return {"status": "ok", "name": name}
 
 async def proceed_ws(data):
@@ -77,7 +85,8 @@ async def proceed_ws(data):
             "camera": {
                 "connected": False,
                 "availablePorts": get_cameras()
-            }
+            },
+            "calibration": str(config.config["ai"]["scale"])
         })
     elif data["type"] == "connectHw":
         await connect_machine(data["port"])
@@ -113,6 +122,18 @@ async def proceed_ws(data):
             "type": "containerAiClasses",
             "classes": config.get_ai_classes(data["model"])
         })
+    elif data["type"] == "calibrate":
+        ai.calibration = float(data["scale"])
+    elif data["type"] == "resetConfigs":
+        config.create_config()
+        config.update_config(True)
+        Socket.close()
+    elif data["type"] == "resetModels":
+        ai.unload_model()
+        config.config["ai"]["default_model"] = ""
+        config.update_config()
+        shutil.rmtree("models")
+        Socket.close()
 
 @app.get("/video")
 async def video_feed():

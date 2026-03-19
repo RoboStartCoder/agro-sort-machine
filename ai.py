@@ -7,8 +7,8 @@ import backend
 import config
 
 allow_control: bool = False
-pixels_per_cm: float = 1.0
 object_found: bool = False
+calibration: float = False
 
 _interpreter = None
 _input_details = None
@@ -16,9 +16,20 @@ _output_details = None
 _labels = None
 
 async def think(frame):
-    global object_found
+    global object_found, calibration
 
     available = await asyncio.to_thread(get_object_available, frame)
+
+    if available and calibration != 0:
+        xmin, xmax, ymin, ymax, mask = get_object_available(frame)
+        width_px = xmax - xmin
+
+        config.set_pixels_per_cm(width_px / calibration)
+        await backend.Socket.send({
+            "type": "calibrate",
+            "result": width_px / calibration
+        })
+        calibration = 0
 
     if available is not None and not object_found:
         result = await asyncio.to_thread(get_object, frame)
@@ -46,10 +57,8 @@ async def think(frame):
             "h": int(result["size"][1])
         })
         if allow_control:
-            print(allow_control)
             import hardware
             layout = hardware.containers_layout[int(container['id'])-1] if container is not None else {1: hardware.ServoState.OPEN, 2: hardware.ServoState.OPEN, 3: hardware.ServoState.OPEN}
-            print(layout)
             await hardware.sync({
                 "motor": hardware.MotorState.FORWARD,
                 "servo_1": layout[1],
@@ -148,8 +157,10 @@ def get_object_size(xmax, xmin, ymin, ymax):
     width_px = xmax - xmin
     height_px = ymax - ymin
 
-    width_cm = width_px / pixels_per_cm
-    height_cm = height_px / pixels_per_cm
+    scale = float(config.config["ai"]["scale"])
+
+    width_cm = width_px / scale
+    height_cm = height_px / scale
 
     return width_cm, height_cm
 

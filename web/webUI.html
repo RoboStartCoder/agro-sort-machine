@@ -261,6 +261,9 @@
             padding: 5px 5px 10px;
         }
 
+        select[disabled][aria-disabled="true"] {
+            background-color: #ffffff;
+        }
         select[disabled] {
             background-color: #acfb64;
         }
@@ -348,6 +351,33 @@
             font-size: 1.5rem;
             color: white;
         }
+        #settings-scale > button {
+            width: 100%;
+            height: 40px;
+            margin-top: 10px;
+        }
+        #settings-scale > div {
+            display: flex;
+        }
+        #settings-scale > div > div {
+            width: 50%;
+        }
+        #settings-scale h3 {
+            color: white;
+        }
+        #settings-scale input {
+            width: 100%;
+        }
+        #settings-host > button {
+            width: 100%;
+            height: 40px;
+            margin-top: 10px;
+            background-color: darkred;
+            color: white;
+        }
+        #container-selector {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -365,10 +395,10 @@
                 <a href="#settings-container">Containers</a>
             </li>
             <li>
-                <a href="#settings-container">Scale Calibration</a>
+                <a href="#settings-scale">Scale Calibration</a>
             </li>
             <li>
-                <a href="#settings-container">Host</a>
+                <a href="#settings-host">Host</a>
             </li>
             <li class="settings-save-container">
                 <a id="setting-save" onclick="closeSettings()" class="disallowed" href="#">Save & Close</a>
@@ -412,15 +442,19 @@
             <div id="settings-container">
                 <h2 style="margin-bottom: 5px">Containers</h2>
                 <div id="container-settings">
-                    <select id="container-selector">
-                        <option value="1">1</option>
-                        <option value="2">2</option>
-                        <option value="3">3</option>
-                        <option value="4">4</option>
-                        <option value="5">5</option>
-                        <option value="6">6</option>
-                    </select>
+                    <div>
+                        <h4>Id</h4>
+                        <select id="container-selector">
+                            <option value="1">1</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="4">4</option>
+                            <option value="5">5</option>
+                            <option value="6">6</option>
+                        </select>
+                    </div>
                     <div class="name-container">
+                        <h4>Name</h4>
                         <input type="text" id="container-name" placeholder="Container name">
                     </div>
                     <div class="ai-container">
@@ -430,46 +464,66 @@
                     </div>
                     <div class="range-container">
                         <h4>Color/R</h4>
-                        <input type="text" name="container-color-r-min" id="container-color-r-min"
+                        <input type="number" name="container-color-r-min" id="container-color-r-min"
                                placeholder="Red min">
                         <p><= r <=</p>
-                        <input type="text" name="container-color-r-max" id="container-color-r-max"
+                        <input type="number" name="container-color-r-max" id="container-color-r-max"
                                placeholder="Red max">
                     </div>
                     <div class="range-container">
                         <h4>Color/G</h4>
-                        <input type="text" name="container-color-g-min" id="container-color-g-min"
+                        <input type="number" name="container-color-g-min" id="container-color-g-min"
                                placeholder="Green min">
                         <p><= g <=</p>
-                        <input type="text" name="container-color-g-max" id="container-color-g-max"
+                        <input type="number" name="container-color-g-max" id="container-color-g-max"
                                placeholder="Green max">
                     </div>
                     <div class="range-container">
                         <h4>Color/B</h4>
-                        <input type="text" name="container-color-b-min" id="container-color-b-min"
+                        <input type="number" name="container-color-b-min" id="container-color-b-min"
                                placeholder="Blue min">
                         <p><= b <=</p>
-                        <input type="text" name="container-color-b-max" id="container-color-b-max"
+                        <input type="number" name="container-color-b-max" id="container-color-b-max"
                                placeholder="Blue max">
                     </div>
                     <div class="range-container">
                         <h4>Scale/W</h4>
-                        <input type="text" name="container-size-w-min" id="container-size-w-min"
+                        <input type="number" name="container-size-w-min" id="container-size-w-min"
                                placeholder="Width min">
                         <p><= w <=</p>
-                        <input type="text" name="container-size-w-max" id="container-size-w-max"
+                        <input type="number" name="container-size-w-max" id="container-size-w-max"
                                placeholder="Width max">
                     </div>
                     <div class="range-container">
                         <h4>Scale/H</h4>
-                        <input type="text" name="container-size-h-min" id="container-size-h-min"
+                        <input type="number" name="container-size-h-min" id="container-size-h-min"
                                placeholder="Height min">
                         <p><= h <=</p>
-                        <input type="text" name="container-size-h-max" id="container-size-h-max"
+                        <input type="number" name="container-size-h-max" id="container-size-h-max"
                                placeholder="Height max">
                     </div>
                     <button style="margin-top: 5px; padding: 10px" onclick="saveContainer()">Save</button>
                 </div>
+            </div>
+            <div id="settings-scale">
+                <h2 style="margin-bottom: 5px">Scale Calibration</h2>
+                <div>
+                    <div>
+                        <h3>Real object scale</h3>
+                        <input type="number" name="real-scale" id="real-scale" placeholder="Real scale" value="1">
+                    </div>
+                    <div>
+                        <h3>Calibrated (px per cm)</h3>
+                        <input type="text" name="result-scale" id="result-scale" disabled>
+                    </div>
+                </div>
+                <button id="calibrate-button" title="Connect camera before calibration" onclick="calibrate()" disabled>Calibrate</button>
+            </div>
+            <div id="settings-host">
+                <h2 style="margin-bottom: 5px">Host</h2>
+                <button id="host-reset-config" onclick="hostResetConfigs()">Reset configs</button>
+                <button id="host-reset-models" onclick="hostResetModels()">Delete all models</button>
+<!--                 <button id="host-restart" onclick="hostRestart()">Restart Host</button> -->
             </div>
         </div>
     </div>
@@ -659,6 +713,45 @@
         }
     }
 
+    function openPresentation() {}
+    
+    function hostConfirmation(task) {
+        return confirm(`Are you sure you want to ${task}?`);
+    }
+    
+    function hostResetConfigs() {
+        if (!hostConfirmation("reset configs")) return;
+        ws.send(JSON.stringify({
+            "type": "resetConfigs"
+        }));
+        location.reload();
+    }
+    
+    function hostResetModels() {
+        if (!hostConfirmation("reset models")) return;
+        ws.send(JSON.stringify({
+            "type": "resetModels"
+        }));
+        location.reload();
+    }
+    
+    function hostRestart() {
+        if (!hostConfirmation("restart host")) return;
+        ws.send(JSON.stringify({
+            "type": "restartHost"
+        }));
+        location.reload();
+    }
+    
+    function calibrate() {
+        ws.send(JSON.stringify({
+            "type": "calibrate",
+            "scale": parseInt(document.getElementById('real-scale').value)
+        }))
+        document.getElementById("calibrate-button").disabled = true;
+        document.getElementById("calibrate-button").title = "Put object on camera";
+    }
+    
     const canvas = document.getElementById("preview");
     const ctx = canvas.getContext("2d");
 
@@ -990,7 +1083,7 @@
         <div id="parameter-color-box" style="background-color: rgb(${r}, ${g}, ${b})" class="data-color"></div>
         ${r}, ${g}, ${b}`;
         document.getElementById('parameter-size').innerText = `${w}, ${h} (cm)`;
-        document.getElementById('parameter-container').innerText = containerId === "" ? `7 (Trash)` : `${containerId} (${containerName})`;
+        document.getElementById('parameter-container').innerText = aiName === null ? `Request type detection` : (containerId === "" ? `7 (Trash)` : `${containerId} (${containerName})`);
     }
 
     function containerAiList() {
@@ -1076,10 +1169,13 @@
                         }
                     }
                 }
+                document.getElementById("result-scale").value = data.calibration;
                 break;
             case "connectedCam":
                 document.getElementById("camera-port").disabled = true;
                 document.getElementById("camera-viewport").src = "http://localhost:8000/api/video";
+                document.getElementById("calibrate-button").disabled = false;
+                document.getElementById("calibrate-button").title = "Set real scale of object in cm";
                 checkReady();
                 break;
             case "connectedHw":
@@ -1091,39 +1187,56 @@
                 servo1State = data.servo_1;
                 servo2State = data.servo_2;
                 servo3State = data.servo_3;
+                if (isControlsManual)
+                    activeContainerId = (data.container === -1 && motorState === MotorState.FORWARD && servo1State === ServoState.OPEN && servo2State === ServoState.OPEN && servo3State === ServoState.OPEN) ? 7 : data.container
                 updateCanvas();
                 updateControls();
                 break;
             case "parameter":
-                activeContainerId = data.container === null ? 7 : parseInt(data.container.id);
+                if (!isControlsManual)
+                    activeContainerId = data.container === null ? 7 : parseInt(data.container.id);
                 updateParameter(data.aiType, data.aiName, data.r, data.g, data.b, data.w, data.h, data.container === null ? 7 : parseInt(data.container.id), data.container === null ? "Trash" : data.container.name);
                 updateCanvas()
                 break;
             case "modelInfo":
                 document.getElementById('model-selector').innerHTML = ""
                 document.getElementById('model-selector').disabled = false;
+                document.getElementById("model-selector").ariaDisabled = "false";
                 document.getElementById('button-ai-use').innerText = "Use"
                 if (data.model !== "") {
                     document.getElementById('model-selector').innerHTML = `<option value="ai-%NAME%">%NAME%</option>`.replaceAll("%NAME%", data.model);
                     document.getElementById('model-selector').value = "ai-%NAME%".replaceAll("%NAME%", data.model)
                     document.getElementById('model-selector').disabled = true;
+                    document.getElementById("model-selector").ariaDisabled = "false";
                     document.getElementById('button-ai-use').innerText = "Unuse"
                 } else {
                     for (const dataKey of data.modelsList) {
-                        console.log(dataKey)
                         document.getElementById('model-selector').innerHTML += `<option value="ai-%NAME%">%NAME%</option>`.replaceAll("%NAME%", dataKey.split('.')[0]);
                     }
+                    if (data.modelsList.length === 0) {
+                        document.getElementById('model-selector').innerHTML = `<option value="">No available models</option>`;
+                        document.getElementById("model-selector").disabled = true;
+                        document.getElementById("model-selector").ariaDisabled = "true";
+                    }
                 }
+                getContainer()
                 break;
             case "containerAiList":
-                document.getElementById("ai-container-model").innerHTML = "";
+                document.getElementById("ai-container-model").innerHTML = `<option value="">Disabled</option>`;
+                document.getElementById("ai-container-model").disabled = false;
+                document.getElementById("ai-container-model").ariaDisabled = "false";
                 for (const datum of data.available) {
                     document.getElementById("ai-container-model").innerHTML += `<option value="%DATA%">%DATA%</option>`.replaceAll("%DATA%", datum.split('.')[0]);
                 }
-                containerAiClasses();
+                if (data.available.length !== 0) {
+                    containerAiClasses();
+                } 
                 break;
             case "containerAiClasses":
-                document.getElementById("ai-container-type").innerHTML = "";
+                document.getElementById("ai-container-type").innerHTML = `<option value="">Disabled</option>`;
+                document.getElementById("ai-container-type").disabled = false;
+                document.getElementById("ai-container-type").ariaDisabled = "false";
+                
                 for (const datum of data.classes) {
                     document.getElementById("ai-container-type").innerHTML += `<option value="%DATA%">%DATA%</option>`.replaceAll("%DATA%", datum);
                 }
@@ -1132,8 +1245,7 @@
                 containerAiList();
                 document.getElementById("container-name").value = data.container.name;
 
-                document.getElementById("ai-container-model").value = data.container.ai.model;
-                document.getElementById("ai-container-type").value = data.container.ai.type;
+                setModelAndType(data.container.ai.model, data.container.ai.type);
 
                 document.getElementById("container-color-r-min").value = data.container.color.r.min;
                 document.getElementById("container-color-r-max").value = data.container.color.r.max;
@@ -1147,8 +1259,33 @@
                 document.getElementById("container-size-h-min").value = data.container.size.height.min;
                 document.getElementById("container-size-h-max").value = data.container.size.height.max;
                 break;
+            case "calibrate":
+                document.getElementById("result-scale").value = data.result;
+                document.getElementById("calibrate-button").disabled = false;
+                document.getElementById("calibrate-button").title = "Set real scale of object in cm";
+                break;
         }
     };
+
+    function setModelAndType(model, typeValue = "") {
+        const modelSelect = document.getElementById("ai-container-model");
+        const typeSelect = document.getElementById("ai-container-type");
+
+        const interval = setInterval(() => {
+            if ([...modelSelect.options].some(opt => opt.value === model)) {
+                modelSelect.value = model;
+                clearInterval(interval);
+
+                containerAiClasses()
+                const typeInterval = setInterval(() => {
+                    if ([...typeSelect.options].length > 0) {
+                        if (typeValue) typeSelect.value = typeValue;
+                        clearInterval(typeInterval);
+                    }
+                }, 50);
+            }
+        }, 50);
+    }
     ws.onclose = () => {
         location.reload();
     }

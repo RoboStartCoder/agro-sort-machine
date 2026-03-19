@@ -6,6 +6,8 @@ from typing import Optional
 import serial
 import serial.tools.list_ports
 import cv2
+
+import ai
 import backend
 
 
@@ -223,7 +225,16 @@ async def sync(data):
     machine.servo_2 = ServoState(data['servo_2'])
     machine.servo_3 = ServoState(data['servo_3'])
 
-    await backend.Socket.send(machine.to_json())
+    container = None
+    if machine.motor == MotorState.FORWARD and not ai.allow_control:
+        for c in range(len(containers_layout)):
+            if containers_layout[c][1] == machine.servo_1 and containers_layout[c][2] == machine.servo_2 and containers_layout[c][3] == machine.servo_3:
+                container = c+1
+
+    await backend.Socket.send({
+        **machine.to_json(),
+        "container": (-1 if container is None else container)
+    })
 
 
 def get_cameras():
