@@ -1173,7 +1173,7 @@
                 break;
             case "connectedCam":
                 document.getElementById("camera-port").disabled = true;
-                document.getElementById("camera-viewport").src = "http://localhost:8000/api/video";
+                document.getElementById("camera-viewport").src = `http://${window.location.host}/api/video`;
                 document.getElementById("calibrate-button").disabled = false;
                 document.getElementById("calibrate-button").title = "Set real scale of object in cm";
                 checkReady();
