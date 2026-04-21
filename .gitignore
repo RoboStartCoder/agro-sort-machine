@@ -214,3 +214,6 @@ models/
 web/
 ai/
 hardware/
+/logs/
+/modules/
+/Test.py

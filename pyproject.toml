@@ -1,0 +1,15 @@
+[project]
+name = "ASM-Core"
+version = "1.0.0"
+requires-python = "==3.9.*"
+dependencies = [
+    "fastapi",
+    "starlette",
+    "uvicorn",
+    "websockets",
+    "python-multipart",
+    "pyserial",
+    "numpy==1.26.4",
+    "Pillow",
+    "opencv-python"
+]

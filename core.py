@@ -1,20 +1,22 @@
 import logging
 import platform
 import sys
+from contextlib import asynccontextmanager
 
 import fastapi
+from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 
 # import config
 import engine
-import logman
+import asm.logman
 
 
 class MyLogmanHandler(logging.Handler):
     def emit(self, record):
         log_entry = self.format(record)
-        logman.log(log_entry, logman.LogType.WEB_SERVER)
+        asm.logman.log(log_entry, asm.logman.LogType.WEB_SERVER)
 
 
 LOGGING_CONFIG = {
@@ -37,7 +39,8 @@ LOGGING_CONFIG = {
 
 # from backend import mount_backend
 
-app = fastapi.FastAPI()
+
+app = FastAPI()
 
 
 def init_fastapi():
@@ -58,8 +61,15 @@ def init_fastapi():
         return open("web/webUI.html", "rb").read()
 
     import uvicorn
-    uvicorn.run("core:app", host="0.0.0.0", port=8000, reload=False, log_config=LOGGING_CONFIG)
-
+    try:
+        logman.log("", logman.LogType.WEB_SERVER)
+        logman.log("Web Server started.", logman.LogType.WEB_SERVER)
+        logman.log("===================", logman.LogType.WEB_SERVER)
+        uvicorn.run("core:app", host="0.0.0.0", port=8000, reload=False, log_config=LOGGING_CONFIG)
+    finally:
+        logman.log("===================", logman.LogType.WEB_SERVER)
+        logman.log("Web Server stopped.", logman.LogType.WEB_SERVER)
+        engine.stop()
 
 if __name__ == '__main__':
     if sys.version_info != (3, 9) and platform.system() != "Linux":
