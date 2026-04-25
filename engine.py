@@ -12,7 +12,7 @@ from unittest.mock import MagicMock
 
 from asm.api.ai import ASMAI
 from asm.api.base import ASMBase, ModuleType, ModuleConfiguration, ModuleRequirement, ModuleRequirementVersionPolicy, \
-    ModuleInformation
+    ModuleInformation, ContainerParameter
 from asm.api.cv import ASMDetector, ASMOpenCV
 from asm.api.hardware import ASMHardware
 from asm.exceptions import ModuleAlreadyRegistered, ModuleRequirementsConflict, ModuleRequirementsNotFound
@@ -24,7 +24,7 @@ import core
 ai: ASMAI
 hw: ASMHardware
 od: ASMDetector
-cvs: list[ASMOpenCV]
+cvs: list[ASMOpenCV] = []
 
 
 def logo():
@@ -64,13 +64,17 @@ def discover_modules(source_file: Path):
     mocker = ImportMocker()
     sys.meta_path.insert(0, mocker)
 
-    if spec and spec.loader:
-        module = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(module)
+    try:
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            spec.loader.exec_module(module)
 
-        for cls_name, cls_obj in inspect.getmembers(module, inspect.isclass):
-            if issubclass(cls_obj, ASMBase) and not inspect.isabstract(cls_obj):
-                loaded_modules.append(cls_obj())
+            for cls_name, cls_obj in inspect.getmembers(module, inspect.isclass):
+                if issubclass(cls_obj, ASMBase) and not inspect.isabstract(cls_obj):
+                    loaded_modules.append(cls_obj())
+    finally:
+        if mocker in sys.meta_path:
+            sys.meta_path.remove(mocker)
 
     return loaded_modules, original_modules, mocker
 
@@ -94,6 +98,7 @@ def register_modules(source_file: Path):
         module_name: str = module_info.name
         module_version: str = module_info.version
         module_configuration: ModuleConfiguration = module_info.configuration_pattern
+        module_parameters = parse_parameters(module_info.parameters, module_id)
 
         module_information: dict = {
             "name": module_name,
@@ -101,6 +106,7 @@ def register_modules(source_file: Path):
             "version": module_version,
             "type": module_type.value,
             "source": module_source,
+            "parameters": module_parameters,
             "requirements": module_requirements_install(module_info.requirements),
             "configuration": check_configuration_pattern(module_configuration)
         }
@@ -115,6 +121,16 @@ def register_modules(source_file: Path):
     for name in list(sys.modules.keys()):
         if name not in original_modules:
             del sys.modules[name]
+
+
+def parse_parameters(parameters: Union[list[ContainerParameter], None], module_id: str):
+    if parameters is None:
+        return []
+    result = []
+    for parameter in parameters:
+        result.append({get_id_by_display_name(
+            f"{module_id}_{parameter.group.name}_{parameter.name}"): f"{parameter.group.parameter_type.value}"})
+    return result
 
 
 def module_requirements_install(requirements: list[ModuleRequirement]):
@@ -170,11 +186,11 @@ def module_requirements_install(requirements: list[ModuleRequirement]):
     return total_requirements
 
 
-def check_configuration_pattern(module_configuration: Union[ModuleConfiguration, None]) -> str:
+def check_configuration_pattern(module_configuration: Union[ModuleConfiguration, None]) -> dict:
     if module_configuration is None:
-        return json.dumps({}, indent=4)
+        return {}
     configuration: dict = module_configuration.configuration
-    return json.dumps(configuration, indent=4)
+    return configuration
 
 
 def unregister_module(module_id: str):
@@ -185,7 +201,7 @@ def load_module(module_id: str) -> Union[Any, None]:
     with open(Path(f"modules/data/{module_id}.json"), "r", encoding="utf-8") as f:
         data = json.load(f)
     module_source: str = data["source"]
-    modules = discover_modules(Path(f"modules/sources/{module_source}"))
+    modules, mk, mk2 = discover_modules(Path(f"modules/sources/{module_source}"))
     for module in modules:
         if get_id_by_display_name(
                 f"{data['type']}_{module_source.split('.')[0]}_{module.module_info().name}") == module_id:
@@ -194,6 +210,7 @@ def load_module(module_id: str) -> Union[Any, None]:
 
 
 def load_default_modules():
+    global hw, ai, od, cvs
     log(f"Loading default modules")
     try:
         with open(Path(f"modules/default_modules.json"), "x", encoding="utf-8") as f:
@@ -209,36 +226,42 @@ def load_default_modules():
         with open(Path(f"modules/default_modules.json"), "r", encoding="utf-8") as f:
             defaults_config: dict = json.load(f)
 
+    log("")
     log(f"Loading default HW module")
     if defaults_config["hw"]:
-        load_module(defaults_config["hw"])
-        log(f"HW modules loaded!")
+        hw = load_module(defaults_config["hw"])
+        log(f"HW module ({hw.module_info().name}) loaded!")
     else:
         log(f"HW module not found, skipping...")
 
+    log("")
     log(f"Loading default AI module")
     if defaults_config["ai"]:
-        load_module(defaults_config["ai"])
-        log(f"AI modules loaded!")
+        ai = load_module(defaults_config["ai"])
+        log(f"AI module ({ai.module_info().name}) loaded!")
     else:
         log(f"AI module not found, skipping...")
 
+    log("")
     log(f"Loading default OD module")
     if defaults_config["od"]:
-        load_module(defaults_config["od"])
-        log(f"OD modules loaded!")
+        od = load_module(defaults_config["od"])
+        log(f"OD module ({od.module_info().name}) loaded!")
     else:
         log(f"OD module not found, skipping...")
 
+    log("")
     log(f"Loading default CV modules")
     cv_count: int = len(defaults_config['cv'])
     log(f"CV modules count: {cv_count}")
     for cv_module in defaults_config["cv"]:
-        load_module(cv_module)
+        cvs.append(load_module(cv_module))
+        log(f"- CV module ({cvs[-1].module_info().name}) loaded!")
     if cv_count > 0:
         log(f"CV modules loaded!")
     else:
         log(f"CV modules not found, skipping...")
+    log("")
     log(f"Default modules loaded!")
 
 
@@ -252,12 +275,16 @@ def init():
     check_modules_folder()
     load_default_modules()
 
-    core.init_fastapi()
-
 
 def stop():
     stop_logger()
+    log("")
+    log("ASM engine stopped, Goodbye!")
 
 
 def get_id_by_display_name(display_name: str) -> str:
-    return re.sub(r'[\\/*?:"<>| ]', '_', display_name)
+    return re.sub(r'[\\/*?:"<>| ]', '_', display_name.lower())
+
+
+def get_id_by_module(module) -> str:
+    return ""

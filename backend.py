@@ -1,18 +1,20 @@
 import os
 import pathlib
 import shutil
-
-from fastapi import *
-
-import config
-import hardware
-from hardware import *
-from starlette.responses import StreamingResponse
 from typing import Optional
 from json import loads
-import ai
 
-app = FastAPI()
+import cv2
+from fastapi import *
+from starlette.responses import StreamingResponse
+
+import hardware as hw
+import parameters
+
+import config
+
+api = FastAPI()
+
 
 class Socket:
     ws: Optional[WebSocket] = None
@@ -21,23 +23,26 @@ class Socket:
     async def send(cls, message):
         if cls.ws:
             await cls.ws.send_json(message)
+
     @classmethod
     def close(cls):
         cls.ws = None
-        abandon()
-        ai.unload_model()
+        hw.abandon()
+        parameters.ai_unload_model()
+
 
 def mount_backend(main_app: FastAPI):
-    main_app.mount("/api", app)
+    main_app.mount("/api", api)
 
-@app.websocket("/ws")
+
+@api.websocket("/ws")
 async def websocket_endpoint(ws: WebSocket):
     await ws.accept()
     Socket.ws = ws
-    ai.object_found = False
-    ai.allow_control = False
+    parameters.object_found = False
+    parameters.allow_control = False
     if config.config["ai"]["default_model"] != "":
-        ai.load_model(config.config["ai"]["default_model"])
+        parameters.ai_load_model(config.config["ai"]["default_model"])
     try:
         while True:
             await proceed_ws(loads(await ws.receive_text()))
@@ -46,52 +51,37 @@ async def websocket_endpoint(ws: WebSocket):
     finally:
         Socket.close()
 
-@app.post("/upload")
-async def upload_model(
-    name: str = Form(...),
-    model: UploadFile = File(...),
-    labels: UploadFile = File(...),
+
+@api.post("/upload")
+async def upload(
+        name: str = Form(...),
+        file: UploadFile = File(...)
 ):
-    os.makedirs("models", exist_ok=True)
-
-    model_path = f"models/{name}.tflite"
-    labels_path = f"models/{name}.txt"
-
-    with open(model_path, "wb") as f:
-        shutil.copyfileobj(model.file, f)
-
-    with open(labels_path, "wb") as f:
-        shutil.copyfileobj(labels.file, f)
-
-    await Socket.send({
-        "type": "modelInfo",
-        "model": f"{config.config['ai']['default_model']}",
-        "modelsList": [p.name for p in pathlib.Path("models").glob("*.tflite")]
-    })
     return {"status": "ok", "name": name}
+
 
 async def proceed_ws(data):
     if data["type"] == "mode":
-        ai.allow_control = not bool(data["manual"])
+        parameters.allow_control = not bool(data["manual"])
     elif data["type"] == "sync":
-        await sync(data)
+        await hw.sync(data)
     elif data["type"] == "info":
         await Socket.send({
             "type": "info",
             "machine": {
-                "connected": is_machine_connected(),
-                "availablePorts": available_ports()
+                "connected": hw.is_machine_connected(),
+                "availablePorts": hw.get_available_machines()
             },
             "camera": {
-                "connected": False,
-                "availablePorts": get_cameras()
+                "connected": hw.is_camera_connected(),
+                "availablePorts": hw.get_available_cameras()
             },
             "calibration": str(config.config["ai"]["scale"])
         })
     elif data["type"] == "connectHw":
-        await connect_machine(data["port"])
+        await hw.connect_machine(data["port"])
     elif data["type"] == "connectCam":
-        await connect_camera(data["port"])
+        await hw.connect_camera(data["port"])
     elif data["type"] == "modelInfo":
         await Socket.send({
             "type": "modelInfo",
@@ -102,9 +92,9 @@ async def proceed_ws(data):
         config.config['ai']['default_model'] = data["model"]
         config.update_config()
         if data["model"] == "":
-            ai.unload_model()
+            parameters.ai_unload_model()
         else:
-            ai.load_model(config.config["ai"]["default_model"])
+            parameters.ai_load_model(config.config["ai"]["default_model"])
     elif data["type"] == "getContainer":
         await Socket.send({
             "type": "getContainer",
@@ -123,23 +113,24 @@ async def proceed_ws(data):
             "classes": config.get_ai_classes(data["model"])
         })
     elif data["type"] == "calibrate":
-        ai.calibration = float(data["scale"])
+        parameters.calibration = float(data["scale"])
     elif data["type"] == "resetConfigs":
         config.create_config()
         config.update_config(True)
         Socket.close()
     elif data["type"] == "resetModels":
-        ai.unload_model()
+        parameters.ai_unload_model()
         config.config["ai"]["default_model"] = ""
         config.update_config()
         shutil.rmtree("models")
         Socket.close()
 
-@app.get("/video")
+
+@api.get("/video")
 async def video_feed():
     if Socket.ws:
         return StreamingResponse(
-            hardware.camera.generate_frames(),
+            generate_frame(),
             media_type="multipart/x-mixed-replace; boundary=frame",
             headers={
                 "X-Frame-Options": "ALLOWALL"
@@ -147,3 +138,17 @@ async def video_feed():
         )
     else:
         return None
+
+
+async def generate_frame():
+    try:
+        while True:
+            frame = hw.frame()
+
+            ret, buffer = cv2.imencode('.jpg', frame)
+            frame_bytes = buffer.tobytes()
+
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+    finally:
+        pass

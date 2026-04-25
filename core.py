@@ -4,6 +4,7 @@ import sys
 from contextlib import asynccontextmanager
 
 import fastapi
+from asm import logman
 from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
@@ -65,7 +66,7 @@ def init_fastapi():
         logman.log("", logman.LogType.WEB_SERVER)
         logman.log("Web Server started.", logman.LogType.WEB_SERVER)
         logman.log("===================", logman.LogType.WEB_SERVER)
-        uvicorn.run("core:app", host="0.0.0.0", port=8000, reload=False, log_config=LOGGING_CONFIG)
+        uvicorn.run(app, host="0.0.0.0", port=8000, log_config=LOGGING_CONFIG)
     finally:
         logman.log("===================", logman.LogType.WEB_SERVER)
         logman.log("Web Server stopped.", logman.LogType.WEB_SERVER)
@@ -78,3 +79,4 @@ if __name__ == '__main__':
     print("ASM booting...")
     logman.init_logman()
     engine.init()
+    init_fastapi()
