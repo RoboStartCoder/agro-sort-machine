@@ -9,9 +9,12 @@ from fastapi import FastAPI
 from starlette.middleware.cors import CORSMiddleware
 from starlette.responses import HTMLResponse
 
+import config
 # import config
 import engine
 import asm.logman
+
+from backend import mount_backend
 
 
 class MyLogmanHandler(logging.Handler):
@@ -55,11 +58,11 @@ def init_fastapi():
         allow_headers=["*"],
     )
 
-    # mount_backend(app)
+    mount_backend(app)
 
     @app.get("/ui", response_class=HTMLResponse)
     async def web_ui():
-        return open("web/webUI.html", "rb").read()
+        return open("modules/web/webUI.html", "rb").read()
 
     import uvicorn
     try:

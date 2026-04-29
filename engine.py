@@ -12,13 +12,14 @@ from unittest.mock import MagicMock
 
 from asm.api.ai import ASMAI
 from asm.api.base import ASMBase, ModuleType, ModuleConfiguration, ModuleRequirement, ModuleRequirementVersionPolicy, \
-    ModuleInformation, ContainerParameter
+    ModuleInformation, ContainerParameter, ContainerParameterType, ContainerParameterGroup
 from asm.api.cv import ASMDetector, ASMOpenCV
 from asm.api.hardware import ASMHardware
 from asm.exceptions import ModuleAlreadyRegistered, ModuleRequirementsConflict, ModuleRequirementsNotFound
 
 from asm.logman import *
 
+import containers
 import core
 
 ai: ASMAI
@@ -37,6 +38,21 @@ def logo():
     log("=                                   /____/                =")
     log("===========================================================")
 
+class ImportMocker(importlib.abc.MetaPathFinder, importlib.abc.Loader):
+    def find_spec(self, fullname, path, target=None):
+        if fullname not in sys.modules:
+            return importlib.util.spec_from_loader(fullname, self)
+        return None
+
+    def create_module(self, spec):
+        module = MagicMock()
+        module.__path__ = []
+        sys.modules[spec.name] = module
+        return module
+
+    def exec_module(self, module):
+        pass
+
 
 def discover_modules(source_file: Path):
     loaded_modules = []
@@ -44,44 +60,23 @@ def discover_modules(source_file: Path):
     module_name = source_file.stem
     spec = importlib.util.spec_from_file_location(module_name, source_file)
 
-    original_modules = sys.modules.copy()
-
-    class ImportMocker(importlib.abc.MetaPathFinder, importlib.abc.Loader):
-        def find_spec(self, fullname, path, target=None):
-            if fullname not in sys.modules:
-                return importlib.util.spec_from_loader(fullname, self)
-            return None
-
-        def create_module(self, spec):
-            module = MagicMock()
-            module.__path__ = []
-            sys.modules[spec.name] = module
-            return module
-
-        def exec_module(self, module):
-            pass
-
-    mocker = ImportMocker()
-    sys.meta_path.insert(0, mocker)
+    module = importlib.util.module_from_spec(spec)
 
     try:
-        if spec and spec.loader:
-            module = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(module)
+        spec.loader.exec_module(module)
+    except ImportError as e:
+        raise ModuleRequirementsNotFound(str(e))
 
-            for cls_name, cls_obj in inspect.getmembers(module, inspect.isclass):
-                if issubclass(cls_obj, ASMBase) and not inspect.isabstract(cls_obj):
-                    loaded_modules.append(cls_obj())
-    finally:
-        if mocker in sys.meta_path:
-            sys.meta_path.remove(mocker)
+    for cls_name, cls_obj in inspect.getmembers(module, inspect.isclass):
+        if issubclass(cls_obj, ASMBase) and not inspect.isabstract(cls_obj):
+            loaded_modules.append(cls_obj())
 
-    return loaded_modules, original_modules, mocker
+    return loaded_modules
 
 
 def register_modules(source_file: Path):
     check_modules_folder()
-    modules, original_modules, mocker = discover_modules(source_file)
+    modules = discover_modules(source_file)
     for module in modules:
         module_info: ModuleInformation = module.module_info()
 
@@ -98,7 +93,15 @@ def register_modules(source_file: Path):
         module_name: str = module_info.name
         module_version: str = module_info.version
         module_configuration: ModuleConfiguration = module_info.configuration_pattern
-        module_parameters = parse_parameters(module_info.parameters, module_id)
+        if module_type == ModuleType.AI:
+            ai_group = ContainerParameterGroup("baseAI", ContainerParameterType.STRING)
+            module_parameters = parse_parameters(
+                [ContainerParameter("model", ai_group), ContainerParameter("class", ai_group)]
+                + (module_info.parameters or []),
+                module_id
+            )
+        else:
+            module_parameters = parse_parameters(module_info.parameters, module_id)
 
         module_information: dict = {
             "name": module_name,
@@ -117,20 +120,37 @@ def register_modules(source_file: Path):
         with open(Path(f"modules/data/{module_id}.json"), "x", encoding="utf-8") as f:
             f.write(json.dumps(module_information, indent=4))
 
-    sys.meta_path.remove(mocker)
-    for name in list(sys.modules.keys()):
-        if name not in original_modules:
-            del sys.modules[name]
+
 
 
 def parse_parameters(parameters: Union[list[ContainerParameter], None], module_id: str):
     if parameters is None:
         return []
-    result = []
+    results = []
     for parameter in parameters:
-        result.append({get_id_by_display_name(
-            f"{module_id}_{parameter.group.name}_{parameter.name}"): f"{parameter.group.parameter_type.value}"})
-    return result
+        need_continue = False
+        for result in results:
+            if parameter.group.name == result["name"]:
+                need_continue = True
+        if need_continue:
+            continue
+        results.append({
+            "name": parameter.group.name,
+            "id": get_id_by_display_name(f"{module_id}_{parameter.group.name}"),
+            "type": parameter.group.parameter_type.value,
+            "parameters": []
+        })
+    for result in results:
+        for parameter in parameters:
+            if parameter.group.name == result["name"]:
+                result["parameters"].append({
+                    "name": parameter.name,
+                    "id": get_id_by_display_name(f"{result['id']}_{parameter.name}"),
+                })
+                containers.add_parameter(get_id_by_display_name(f"{result['id']}_{parameter.name}"),
+                                         ContainerParameterType(result["type"]))
+
+    return results
 
 
 def module_requirements_install(requirements: list[ModuleRequirement]):
@@ -198,13 +218,15 @@ def unregister_module(module_id: str):
 
 
 def load_module(module_id: str) -> Union[Any, None]:
+    sys.meta_path = [x for x in sys.meta_path if not isinstance(x, ImportMocker)]
     with open(Path(f"modules/data/{module_id}.json"), "r", encoding="utf-8") as f:
         data = json.load(f)
     module_source: str = data["source"]
-    modules, mk, mk2 = discover_modules(Path(f"modules/sources/{module_source}"))
+    modules = discover_modules(Path(f"modules/sources/{module_source}"))
     for module in modules:
         if get_id_by_display_name(
                 f"{data['type']}_{module_source.split('.')[0]}_{module.module_info().name}") == module_id:
+            module.configuration(ModuleConfiguration(data["configuration"]))
             return module
     return None
 
@@ -238,6 +260,7 @@ def load_default_modules():
     log(f"Loading default AI module")
     if defaults_config["ai"]:
         ai = load_module(defaults_config["ai"])
+        containers.active_ai(ai)
         log(f"AI module ({ai.module_info().name}) loaded!")
     else:
         log(f"AI module not found, skipping...")
@@ -271,20 +294,76 @@ def check_modules_folder():
 
 
 def init():
+    containers.load_containers()
     logo()
     check_modules_folder()
     load_default_modules()
 
 
 def stop():
-    stop_logger()
     log("")
     log("ASM engine stopped, Goodbye!")
+    stop_logger()
 
 
 def get_id_by_display_name(display_name: str) -> str:
     return re.sub(r'[\\/*?:"<>| ]', '_', display_name.lower())
 
 
-def get_id_by_module(module) -> str:
+def get_id_by_module(module_in) -> str:
+    for module_json in Path(f"modules/data").iterdir():
+        with open(module_json, "r", encoding="utf-8") as f:
+            module = json.load(f)
+            if module["name"] == module_in.module_info().name:
+                return module["id"]
     return ""
+
+
+def get_active_modules():
+    result = {
+        "ai": {
+            "name": "",
+            "id": ""
+        },
+        "hw": {
+            "name": "",
+            "id": ""
+        },
+        "od": {
+            "name": "",
+            "id": ""
+        },
+        "cvs": []
+    }
+    result["ai"]["name"] = ai.module_info().name
+    result["ai"]["id"] = get_id_by_module(ai)
+
+    result["hw"]["name"] = hw.module_info().name
+    result["hw"]["id"] = get_id_by_module(hw)
+
+    result["od"]["name"] = od.module_info().name
+    result["od"]["id"] = get_id_by_module(od)
+
+    for cv in cvs:
+        result["cvs"].append({
+            "name": cv.module_info().name,
+            "id": get_id_by_module(cv)
+        })
+    return result
+
+
+def get_all_modules():
+    result = {
+        "ai": [],
+        "hw": [],
+        "od": [],
+        "cvs": []
+    }
+    for module_json in Path(f"modules/data").iterdir():
+        with open(module_json, "r", encoding="utf-8") as f:
+            module = json.load(f)
+            result["cvs" if module["type"] == "cv" else module["type"]].append({
+                "name": module["name"],
+                "id": module["id"]
+            })
+    return result

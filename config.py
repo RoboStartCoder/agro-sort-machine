@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+from pathlib import Path
 from typing import Any
 
 import parameters
@@ -213,7 +214,8 @@ config_pattern = {
 config: Any
 
 
-def read_config():
+def read_config() -> None:
+    import parameters as ai
     global config
     if os.path.isfile("config.json"):
         with open("config.json", "r") as read_file:
@@ -222,9 +224,6 @@ def read_config():
         create_config()
         with open("config.json", "r") as read_file:
             config = json.load(read_file)
-
-    if config["ai"]["default_model"] != "":
-        ai.ai_load_model(config["ai"]["default_model"])
 
 
 def update_config(from_file=False):
@@ -292,13 +291,6 @@ def get_ai_classes(model_name):
 
 def get_default_model():
     return config["ai"]["default_model"]
-
-
-def get_container(id_):
-    for c in config["containers"]:
-        if str(c['id']) == str(id_):
-            return c
-    return None
 
 
 def set_container(data):
